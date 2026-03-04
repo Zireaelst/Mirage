@@ -16,6 +16,7 @@ interface DeploymentAddresses {
     identityGate: string
     shadowMarket: string
     settlementReceiver: string
+    privatePayouts: string
     worldIdRouter: string
     deployedAt: string
     deployer: string
@@ -42,34 +43,43 @@ async function main(): Promise<void> {
     const identityGateAddr = await identityGate.getAddress()
     console.log(`     ✓ IdentityGate: ${identityGateAddr}`)
 
-    // ── Step 2: Deploy ShadowMarket ──
-    console.log('2/4 Deploying ShadowMarket...')
-    const ShadowMarket = await ethers.getContractFactory('ShadowMarket')
+    // ── Step 2: Deploy ShadowMarketV2 ──
+    console.log('2/5 Deploying ShadowMarketV2...')
+    const ShadowMarket = await ethers.getContractFactory('ShadowMarketV2')
     const shadowMarket = await ShadowMarket.deploy(identityGateAddr)
     await shadowMarket.waitForDeployment()
     const shadowMarketAddr = await shadowMarket.getAddress()
-    console.log(`     ✓ ShadowMarket: ${shadowMarketAddr}`)
+    console.log(`     ✓ ShadowMarketV2: ${shadowMarketAddr}`)
 
-    // ── Step 3: Deploy SettlementReceiver ──
-    console.log('3/4 Deploying SettlementReceiver...')
+    // ── Step 3: Deploy PrivatePayouts ──
+    console.log('3/5 Deploying PrivatePayouts...')
+    const PrivatePayouts = await ethers.getContractFactory('PrivatePayouts')
+    const privatePayouts = await PrivatePayouts.deploy()
+    await privatePayouts.waitForDeployment()
+    const privatePayoutsAddr = await privatePayouts.getAddress()
+    console.log(`     ✓ PrivatePayouts: ${privatePayoutsAddr}`)
+
+    // ── Step 4: Deploy SettlementReceiver ──
+    console.log('4/5 Deploying SettlementReceiver...')
     const SettlementReceiver = await ethers.getContractFactory('SettlementReceiver')
     const settlementReceiver = await SettlementReceiver.deploy(shadowMarketAddr)
     await settlementReceiver.waitForDeployment()
     const settlementReceiverAddr = await settlementReceiver.getAddress()
     console.log(`     ✓ SettlementReceiver: ${settlementReceiverAddr}`)
 
-    // ── Step 4: Wire contracts together ──
-    console.log('4/4 Wiring contracts...')
+    // ── Step 5: Wire contracts together ──
+    console.log('5/5 Wiring contracts...')
     const setReceiverTx = await shadowMarket.setSettlementReceiver(settlementReceiverAddr)
     await setReceiverTx.wait()
-    console.log(`     ✓ ShadowMarket.setSettlementReceiver(${settlementReceiverAddr})`)
+    console.log(`     ✓ ShadowMarketV2.setSettlementReceiver(${settlementReceiverAddr})`)
 
     // ── Summary ──
     console.log('\n═══════════════════════════════════════════════')
     console.log('  DEPLOYMENT COMPLETE')
     console.log('═══════════════════════════════════════════════')
     console.log(`  IdentityGate:       ${identityGateAddr}`)
-    console.log(`  ShadowMarket:       ${shadowMarketAddr}`)
+    console.log(`  ShadowMarketV2:     ${shadowMarketAddr}`)
+    console.log(`  PrivatePayouts:     ${privatePayoutsAddr}`)
     console.log(`  SettlementReceiver: ${settlementReceiverAddr}`)
     console.log(`  WorldIDRouter:      ${WORLD_ID_ROUTER}`)
     console.log('═══════════════════════════════════════════════\n')
@@ -81,6 +91,7 @@ async function main(): Promise<void> {
         identityGate: identityGateAddr,
         shadowMarket: shadowMarketAddr,
         settlementReceiver: settlementReceiverAddr,
+        privatePayouts: privatePayoutsAddr,
         worldIdRouter: WORLD_ID_ROUTER,
         deployedAt: new Date().toISOString(),
         deployer: deployer.address,
