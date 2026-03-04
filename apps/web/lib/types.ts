@@ -73,4 +73,63 @@ export interface ApiResponse<T> {
     error?: string
 }
 
+/** Data for revealing a commitment during claim phase */
+export interface RevealData {
+    marketId: `0x${string}`
+    choice: boolean
+    amount: bigint
+    salt: `0x${string}`
+}
+
+/** User's portfolio position (aggregated from localStorage + onchain) */
+export interface PortfolioPosition {
+    marketId: `0x${string}`
+    marketTitle: string
+    category: MarketCategory
+    choice: boolean
+    amount: string               // wei as string
+    status: 'committed' | 'revealed' | 'claimed' | 'lost'
+    marketStatus: MarketStatus
+    outcome: boolean | null
+    committedAt: number
+    payout?: string              // wei as string, only after claim
+}
+
+/** Settlement record from SettlementReceiver */
+export interface SettlementRecord {
+    marketId: `0x${string}`
+    marketTitle: string
+    outcome: boolean
+    settledAt: number
+    proof: `0x${string}`
+    txHash?: `0x${string}`
+}
+
+/** Input for creating a new market */
+export interface CreateMarketInput {
+    title: string
+    description: string
+    category: MarketCategory
+    endTime: number              // unix timestamp
+    minBet: string               // ETH as string (converted to wei before tx)
+}
+
+/** Tenderly simulation result */
+export interface SimulationResult {
+    success: boolean
+    gasUsed: number
+    error?: string
+    logs?: string[]
+}
+
+/** Portfolio aggregate statistics */
+export interface PortfolioStats {
+    totalCommitted: bigint
+    totalClaimed: bigint
+    totalPositions: number
+    winCount: number
+    lossCount: number
+    pendingCount: number
+}
+
 // ✓ types.ts complete
