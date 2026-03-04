@@ -1,0 +1,33 @@
+{
+    "name": "mirage-identity-workflow",
+    "version": "0.1.0",
+    "description": "CRE workflow: World ID verification → IdentityGate onchain write",
+    "trigger": {
+        "type": "http",
+        "config": {
+            "method": "POST",
+            "path": "/verify-identity"
+        }
+    },
+    "consensus": {
+        "type": "identical",
+        "aggregation": "consensusIdenticalAggregation"
+    },
+    "target": {
+        "type": "evm-write",
+        "config": {
+            "chainName": "ethereum-sepolia",
+            "contractAddress": "0x0000000000000000000000000000000000000001"
+        }
+    },
+    "config": {
+        "worldIdApiUrl": "https://developer.worldcoin.org",
+        "worldIdAppId": "app_xxx",
+        "identityGateAddress": "0x0000000000000000000000000000000000000001",
+        "chainName": "ethereum-sepolia",
+        "rpId": "rp_xxx"
+    },
+    "secrets": [
+        "RP_SIGNING_KEY"
+    ]
+}

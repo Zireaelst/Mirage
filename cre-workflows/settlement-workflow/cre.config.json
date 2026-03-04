@@ -1,0 +1,34 @@
+{
+    "name": "mirage-settlement-workflow",
+    "version": "0.1.0",
+    "description": "CRE workflow: MarketClosed EVM log → Confidential HTTP data fetch → AI settlement → onchain write",
+    "trigger": {
+        "type": "evm-log",
+        "config": {
+            "chainName": "ethereum-sepolia",
+            "contractAddress": "0x0000000000000000000000000000000000000002",
+            "eventSignature": "MarketClosed(bytes32)",
+            "eventName": "MarketClosed"
+        }
+    },
+    "consensus": {
+        "type": "identical",
+        "aggregation": "consensusIdenticalAggregation"
+    },
+    "target": {
+        "type": "evm-write",
+        "config": {
+            "chainName": "ethereum-sepolia",
+            "contractAddress": "0x0000000000000000000000000000000000000003"
+        }
+    },
+    "config": {
+        "shadowMarketAddress": "0x0000000000000000000000000000000000000002",
+        "settlementReceiverAddress": "0x0000000000000000000000000000000000000003",
+        "chainName": "ethereum-sepolia",
+        "dataApiUrl": "https://api.coingecko.com"
+    },
+    "secrets": [
+        "DATA_API_KEY"
+    ]
+}
