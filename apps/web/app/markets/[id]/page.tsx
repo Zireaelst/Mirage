@@ -7,58 +7,34 @@
 
 import { useState, useCallback, type ReactNode } from 'react'
 import { useParams } from 'next/navigation'
+import Link from 'next/link'
 import { WorldIDButton } from '@/components/web3/WorldIDButton'
 import { CommitPosition } from '@/components/web3/CommitPosition'
-import type { Market } from '@/lib/types'
+import type { Market, MarketCategory, MarketStatus } from '@/lib/types'
+import { useReadContract } from 'wagmi'
+import { CONTRACT_ADDRESSES, SHADOW_MARKET_ABI } from '@/lib/contracts'
 
-// Demo market lookup — replace with onchain fetch
-const DEMO_MARKETS: Record<string, Market> = {
-    '0x0000000000000000000000000000000000000000000000000000000000000001': {
-        id: '0x0000000000000000000000000000000000000000000000000000000000000001',
-        title: 'Will BTC exceed $150,000 by March 2025?',
-        description:
-            'This market resolves YES if Bitcoin (BTC) price on CoinGecko exceeds $150,000 USD at any point before March 31, 2025 23:59 UTC. Resolution source: CoinGecko OHLCV API via Chainlink CRE Confidential HTTP.',
-        category: 'CRYPTO',
-        endTime: Math.floor(Date.now() / 1000) + 86400 * 30,
-        minBet: BigInt(1e16),
-        yesOdds: 68,
-        noOdds: 32,
-        volume: BigInt(42e18),
-        status: 'OPEN',
-        outcome: null,
-        isPrivate: true,
-    },
-    '0x0000000000000000000000000000000000000000000000000000000000000002': {
-        id: '0x0000000000000000000000000000000000000000000000000000000000000002',
-        title: 'Will the Fed cut rates in Q2 2025?',
-        description:
-            'Resolves YES if the Federal Reserve announces a rate cut at any FOMC meeting during April–June 2025. Resolution source: FRED API via Chainlink CRE.',
-        category: 'MACRO',
-        endTime: Math.floor(Date.now() / 1000) + 86400 * 60,
-        minBet: BigInt(5e15),
-        yesOdds: 55,
-        noOdds: 45,
-        volume: BigInt(18e18),
-        status: 'OPEN',
-        outcome: null,
-        isPrivate: true,
-    },
-    '0x0000000000000000000000000000000000000000000000000000000000000003': {
-        id: '0x0000000000000000000000000000000000000000000000000000000000000003',
-        title: 'Will GPT-5 be released before July 2025?',
-        description:
-            'Resolves YES if OpenAI publicly releases GPT-5 (or equivalent successor model) before July 1, 2025. Announcement must include public API access.',
-        category: 'AI',
-        endTime: Math.floor(Date.now() / 1000) + 86400 * 90,
-        minBet: BigInt(1e16),
-        yesOdds: 42,
-        noOdds: 58,
-        volume: BigInt(27e18),
-        status: 'OPEN',
-        outcome: null,
-        isPrivate: true,
-    },
+function mapCategory(c: number): MarketCategory {
+    switch (c) {
+        case 0: return 'CRYPTO'
+        case 1: return 'MACRO'
+        case 2: return 'AI'
+        case 3: return 'SPORTS'
+        case 4: return 'PROTOCOL'
+        default: return 'OTHER'
+    }
 }
+
+function mapStatus(s: number): MarketStatus {
+    switch (s) {
+        case 0: return 'OPEN'
+        case 1: return 'CLOSED'
+        case 2: return 'SETTLED'
+        default: return 'OPEN'
+    }
+}
+
+// Removing DEMO_MARKETS to use onchain data
 
 function formatCountdown(endTime: number): string {
     const now = Math.floor(Date.now() / 1000)
@@ -92,9 +68,40 @@ export default function MarketDetailPage(): ReactNode {
         console.log('Position committed successfully')
     }, [])
 
-    const market = DEMO_MARKETS[marketId]
+    const { data: rawMarket, isLoading } = useReadContract({
+        address: CONTRACT_ADDRESSES.shadowMarket,
+        abi: SHADOW_MARKET_ABI,
+        functionName: 'getMarket',
+        args: [marketId as `0x${string}`],
+        query: { refetchInterval: 10000 }
+    })
 
-    if (!market) {
+    const market: Market | null = rawMarket ? {
+        id: rawMarket.id,
+        title: rawMarket.title,
+        description: rawMarket.description,
+        category: mapCategory(rawMarket.category),
+        endTime: Number(rawMarket.endTime),
+        minBet: rawMarket.minBet,
+        yesOdds: 50, // Default privacy odds
+        noOdds: 50,
+        volume: rawMarket.totalPool,
+        status: mapStatus(rawMarket.status),
+        outcome: rawMarket.outcomeSet ? rawMarket.outcome : null,
+        isPrivate: true,
+    } : null
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen pt-24 flex items-center justify-center">
+                <div className="font-mono text-sm text-mirage-text-dimmer animate-pulse">
+                    // loading market data from sepolia...
+                </div>
+            </div>
+        )
+    }
+
+    if (!market || market.id === '0x0000000000000000000000000000000000000000000000000000000000000000') {
         return (
             <div className="min-h-screen pt-24 flex items-center justify-center">
                 <div className="border border-mirage-border p-16 text-center">
@@ -202,12 +209,19 @@ export default function MarketDetailPage(): ReactNode {
                         {/* Activity */}
                         <div className="border border-mirage-border p-5 bg-mirage-bg2">
                             <span className="section-label text-[10px] mb-3 inline-block">// ACTIVITY</span>
-                            <div className="space-y-2">
-                                <div className="font-mono text-xs text-mirage-text-dim">
-                                    ▓ positions committed (amounts hidden)
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center">
+                                    <span className="font-mono text-xs text-mirage-text-dim">
+                                        ▓ positions committed (amounts hidden)
+                                    </span>
+                                    <span className="font-mono text-[10px] text-mirage-text-dimmer">
+                                        {rawMarket ? Number(rawMarket.commitCount) : 0} participants, positions encrypted
+                                    </span>
                                 </div>
+                                <div className="h-px bg-mirage-border" />
                                 <div className="font-mono text-[10px] text-mirage-text-dimmer">
-                                    individual positions are not visible — privacy by design
+                                    individual positions are not visible — privacy by design.
+                                    aggregate volume is shown but individual amounts remain hidden.
                                 </div>
                             </div>
                         </div>
@@ -237,6 +251,16 @@ export default function MarketDetailPage(): ReactNode {
                                     </span>
                                 </div>
                             </div>
+                        )}
+
+                        {/* Reveal & Claim link — shows for settled markets */}
+                        {market.status === 'SETTLED' && (
+                            <Link
+                                href={`/markets/${market.id}/reveal`}
+                                className="block border border-mirage-green/30 bg-mirage-green-dim p-5 text-center font-mono text-xs tracking-wider text-mirage-green hover:bg-mirage-green hover:text-mirage-bg transition-all duration-200"
+                            >
+                                // reveal & claim winnings →
+                            </Link>
                         )}
 
                         {/* Protocol info */}

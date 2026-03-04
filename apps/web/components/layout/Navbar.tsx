@@ -30,12 +30,18 @@ export function Navbar(): ReactNode {
                     >
                         Markets
                     </Link>
-                    <span className="font-mono text-xs tracking-wider uppercase text-mirage-text-dimmer cursor-not-allowed">
-                        Docs
-                    </span>
-                    <span className="font-mono text-xs tracking-wider uppercase text-mirage-text-dimmer cursor-not-allowed">
-                        Protocol
-                    </span>
+                    <Link
+                        href="/portfolio"
+                        className="font-mono text-xs tracking-wider uppercase text-mirage-text-dim hover:text-mirage-text transition-colors duration-200"
+                    >
+                        Portfolio
+                    </Link>
+                    <Link
+                        href="/settlements"
+                        className="font-mono text-xs tracking-wider uppercase text-mirage-text-dim hover:text-mirage-text transition-colors duration-200"
+                    >
+                        Settlements
+                    </Link>
                 </div>
 
                 {/* Wallet */}

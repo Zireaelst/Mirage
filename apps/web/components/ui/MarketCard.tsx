@@ -83,7 +83,7 @@ export function MarketCard({ market }: MarketCardProps): ReactNode {
                     </div>
                 </div>
 
-                {/* Footer: volume + privacy tag */}
+                {/* Footer: volume + participants + privacy tag */}
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <span className="font-mono text-[10px] text-mirage-text-dimmer">
@@ -93,9 +93,14 @@ export function MarketCard({ market }: MarketCardProps): ReactNode {
                             {formatTimeLeft(market.endTime)}
                         </span>
                     </div>
-                    <span className="font-mono text-[10px] text-mirage-text-dimmer">
-                        ▓ positions hidden
-                    </span>
+                    <div className="flex items-center gap-2">
+                        <span className="font-mono text-[10px] text-mirage-text-dimmer animate-pulse-dot">
+                            ▓▓▓
+                        </span>
+                        <span className="font-mono text-[10px] text-mirage-text-dimmer">
+                            encrypted
+                        </span>
+                    </div>
                 </div>
             </div>
         </Link>

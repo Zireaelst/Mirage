@@ -6,7 +6,7 @@
         "type": "evm-log",
         "config": {
             "chainName": "ethereum-sepolia",
-            "contractAddress": "0x0000000000000000000000000000000000000002",
+            "contractAddress": "0x54576aC5a0cF7566287d7fcb410c8f523357889d",
             "eventSignature": "MarketClosed(bytes32)",
             "eventName": "MarketClosed"
         }
@@ -19,12 +19,12 @@
         "type": "evm-write",
         "config": {
             "chainName": "ethereum-sepolia",
-            "contractAddress": "0x0000000000000000000000000000000000000003"
+            "contractAddress": "0x25Fb1b433Db1dFAfF1C73Dd189E7183d8fDe0FC4"
         }
     },
     "config": {
-        "shadowMarketAddress": "0x0000000000000000000000000000000000000002",
-        "settlementReceiverAddress": "0x0000000000000000000000000000000000000003",
+        "shadowMarketAddress": "0x54576aC5a0cF7566287d7fcb410c8f523357889d",
+        "settlementReceiverAddress": "0x25Fb1b433Db1dFAfF1C73Dd189E7183d8fDe0FC4",
         "chainName": "ethereum-sepolia",
         "dataApiUrl": "https://api.coingecko.com"
     },
