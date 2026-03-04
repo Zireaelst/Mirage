@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build
+.next/
+out/
+dist/
+build/
+typechain-types/
+artifacts/
+cache/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Keys & Secrets
+*.pem
+*.key
+
+# Hardhat
+coverage/
+coverage.json
+
+# Misc
+*.log
+npm-debug.log*

@@ -1,0 +1,16 @@
+{
+    "name": "mirage-market",
+    "private": true,
+    "workspaces": [
+        "apps/*",
+        "packages/*"
+    ],
+    "scripts": {
+        "dev": "cd apps/web && next dev",
+        "build": "cd apps/web && next build",
+        "deploy:contracts": "cd packages/contracts && npx hardhat run scripts/deploy.ts --network tenderly-vtn",
+        "simulate:identity": "cd cre-workflows/identity-workflow && cre workflow simulate main --target staging-settings",
+        "simulate:settlement": "cd cre-workflows/settlement-workflow && cre workflow simulate main --target staging-settings",
+        "test:contracts": "cd packages/contracts && npx hardhat test"
+    }
+}
