@@ -1,0 +1,21 @@
+{
+    "name": "@mirage/contracts",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "compile": "hardhat compile",
+        "test": "hardhat test",
+        "deploy": "hardhat run scripts/deploy.ts",
+        "deploy:tenderly": "hardhat run scripts/deploy.ts --network tenderly-vtn"
+    },
+    "devDependencies": {
+        "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+        "hardhat": "^2.22.0",
+        "typescript": "^5.7.2",
+        "ts-node": "^10.9.2",
+        "@types/node": "^22.10.0"
+    },
+    "dependencies": {
+        "@openzeppelin/contracts": "^5.1.0"
+    }
+}
