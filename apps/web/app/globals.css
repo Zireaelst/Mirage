@@ -1,0 +1,201 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════════
+   MIRAGE MARKET — Global Styles
+   Monochrome dithering aesthetic, brutalist UI
+   ═══════════════════════════════════════════════ */
+
+:root {
+  --bg: #0a0a0a;
+  --bg2: #111111;
+  --surface: #161616;
+  --border: #2a2a2a;
+  --border-bright: #3d3d3d;
+  --text: #e8e8e8;
+  --text-dim: #888888;
+  --text-dimmer: #444444;
+  --green: #4ade80;
+  --green-dim: #1a3d2b;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  cursor: crosshair;
+  font-family: var(--font-geist-mono), 'Geist Mono', monospace;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Force zero border-radius globally */
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-bright);
+}
+
+/* ── Selection ── */
+::selection {
+  background: var(--text);
+  color: var(--bg);
+}
+
+/* ── Dither Hover Pattern ── */
+.dither-hover {
+  position: relative;
+  overflow: hidden;
+}
+
+.dither-hover::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background-image: radial-gradient(circle, var(--text-dimmer) 1px, transparent 1px);
+  background-size: 4px 4px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.dither-hover:hover::before {
+  opacity: 0.4;
+}
+
+/* ── Section Labels ── */
+.section-label {
+  display: inline-block;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  margin-bottom: 24px;
+}
+
+/* ── Terminal Block ── */
+.terminal-block {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  padding: 16px 20px;
+  background: var(--bg2);
+}
+
+/* ── Animations ── */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease forwards;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease forwards;
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* ── Ticker scroll ── */
+@keyframes ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.ticker-scroll {
+  animation: ticker-scroll 30s linear infinite;
+}
+
+/* ── Links & Buttons ── */
+a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+button {
+  cursor: crosshair;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-geist-mono), monospace;
+  transition: all 0.2s ease;
+}
+
+button:hover {
+  border-color: var(--border-bright);
+  background: var(--bg2);
+}
+
+button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+input {
+  cursor: crosshair;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-geist-mono), monospace;
+  padding: 8px 12px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+input:focus {
+  border-color: var(--border-bright);
+}
+
+/* ✓ globals.css complete */
