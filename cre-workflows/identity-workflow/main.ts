@@ -2,7 +2,8 @@
 // MIRAGE MARKET — CRE Identity Verification Workflow
 //
 // PURPOSE: Receive World ID proof via HTTP trigger,
-//          verify offchain, then write to IdentityGate.sol onchain.
+//          verify offchain via DON consensus, then write
+//          to IdentityGate.sol onchain.
 //
 // TRACK:  World ID + CRE ($5k)
 // REASON: "Use CRE to bring World ID to chains where it's
@@ -21,23 +22,16 @@
 //            a verification.
 // ═══════════════════════════════════════════════
 
-// --- TypeScript Interfaces (CRE SDK types) ---
+import {
+    type CRERuntime,
+    type HTTPTriggerEvent,
+    type HTTPResponse,
+    type EVMReadResult,
+    type EVMWriteResult,
+} from '@chainlink/cre-sdk'
 
-/** World ID proof payload from the HTTP trigger */
-interface WorldIDPayload {
-    nullifier_hash: string
-    merkle_root: string
-    proof: string
-    verification_level: 'orb' | 'device'
-}
+// ── Workflow Configuration (from workflow.yaml config:) ──
 
-/** CRE HTTP client response */
-interface HTTPResponse {
-    status: number
-    body: Record<string, unknown>
-}
-
-/** Workflow configuration — set in cre.config.json */
 interface WorkflowConfig {
     worldIdApiUrl: string
     worldIdAppId: string
@@ -46,41 +40,47 @@ interface WorkflowConfig {
     rpId: string
 }
 
-/** CRE runtime interface (provided by the CRE SDK) */
-interface CRERuntime {
-    log: (message: string, data?: Record<string, unknown>) => void
-    getSecret: (key: string) => string
-    httpClient: {
-        fetch: (url: string, options: RequestInit) => Promise<HTTPResponse>
-    }
-    evmClient: {
-        writeContract: (params: {
-            contractAddress: string
-            method: string
-            args: unknown[]
-            chainName: string
-            abi: unknown[]
-        }) => Promise<{ txHash: string }>
-        readContract: (params: {
-            contractAddress: string
-            method: string
-            args: unknown[]
-            chainName: string
-            abi: unknown[]
-        }) => Promise<unknown>
-    }
+// ── World ID Proof Payload ──
+
+interface WorldIDPayload {
+    nullifier_hash: string
+    merkle_root: string
+    proof: string
+    verification_level: 'orb' | 'device'
 }
 
-/** CRE trigger event from HTTP */
-interface HTTPTriggerEvent {
-    body: WorldIDPayload
-    headers: Record<string, string>
-}
+// ── IdentityGate ABI Fragments ──
 
-// --- Workflow Implementation ---
+const IS_NULLIFIER_USED_ABI = [
+    {
+        inputs: [{ name: 'nullifierHash', type: 'uint256' }],
+        name: 'isNullifierUsed',
+        outputs: [{ name: '', type: 'bool' }],
+        stateMutability: 'view',
+        type: 'function',
+    },
+] as const
+
+const VERIFY_AND_REGISTER_ABI = [
+    {
+        inputs: [
+            { name: 'root', type: 'uint256' },
+            { name: 'signalHash', type: 'uint256' },
+            { name: 'nullifierHash', type: 'uint256' },
+            { name: 'externalNullifierHash', type: 'uint256' },
+            { name: 'proof', type: 'uint256[8]' },
+        ],
+        name: 'verifyAndRegister',
+        outputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+    },
+] as const
+
+// ── Main Handler (CRE SDK Pattern) ──
 
 /**
- * CRE Identity Verification Workflow
+ * CRE Identity Verification Workflow Handler
  *
  * This workflow is triggered via HTTP POST from our backend
  * (/api/world-id/verify) after the user completes IDKit.
@@ -95,15 +95,15 @@ interface HTTPTriggerEvent {
  * 2. The World ID API response is cryptographically attested by DON consensus
  * 3. The onchain write is trustless and verifiable
  */
-export async function handler(
+export default function handler(
     runtime: CRERuntime,
     trigger: HTTPTriggerEvent,
     config: WorkflowConfig
-): Promise<{ verified: boolean; nullifierHash: string; txHash: string }> {
+) {
     // ── Step 1: Parse proof data from HTTP payload ──
     runtime.log('Step 1: Parsing World ID proof from trigger payload')
 
-    const payload = trigger.body
+    const payload = trigger.body as WorldIDPayload
     if (!payload.nullifier_hash || !payload.proof || !payload.merkle_root) {
         throw new Error('Invalid payload: missing required World ID proof fields')
     }
@@ -120,7 +120,7 @@ export async function handler(
     // DON consensus on the result before writing onchain.
     runtime.log('Step 2: Verifying proof via World ID API')
 
-    const verifyResponse = await runtime.httpClient.fetch(
+    const verifyFetch = runtime.httpClient.fetch(
         `${config.worldIdApiUrl}/api/v2/verify/${config.worldIdAppId}`,
         {
             method: 'POST',
@@ -134,6 +134,9 @@ export async function handler(
             }),
         }
     )
+
+    // .result() blocks until DON consensus on the HTTP response
+    const verifyResponse = verifyFetch.result()
 
     if (verifyResponse.status !== 200) {
         runtime.log('World ID verification failed', {
@@ -150,21 +153,16 @@ export async function handler(
     // Convert nullifier hash to uint256 for the contract call
     const nullifierBigInt = BigInt(payload.nullifier_hash)
 
-    const isUsed = await runtime.evmClient.readContract({
+    const nullifierRead = runtime.evmClient.readContract({
         contractAddress: config.identityGateAddress,
         method: 'isNullifierUsed',
         args: [nullifierBigInt],
         chainName: config.chainName,
-        abi: [
-            {
-                inputs: [{ name: 'nullifierHash', type: 'uint256' }],
-                name: 'isNullifierUsed',
-                outputs: [{ name: '', type: 'bool' }],
-                stateMutability: 'view',
-                type: 'function',
-            },
-        ],
+        abi: IS_NULLIFIER_USED_ABI,
     })
+
+    // .result() blocks until the DON reads the contract
+    const isUsed = nullifierRead.result() as boolean
 
     if (isUsed) {
         runtime.log('Nullifier already used — sybil attempt blocked')
@@ -177,7 +175,7 @@ export async function handler(
     // the onchain write is submitted via the CRE forwarder.
     runtime.log('Step 4: Writing verification to IdentityGate onchain')
 
-    const txResult = await runtime.evmClient.writeContract({
+    const txWrite = runtime.evmClient.writeContract({
         contractAddress: config.identityGateAddress,
         method: 'verifyAndRegister',
         args: [
@@ -188,22 +186,11 @@ export async function handler(
             Array(8).fill(BigInt(0)),          // proof (simplified for MVP)
         ],
         chainName: config.chainName,
-        abi: [
-            {
-                inputs: [
-                    { name: 'root', type: 'uint256' },
-                    { name: 'signalHash', type: 'uint256' },
-                    { name: 'nullifierHash', type: 'uint256' },
-                    { name: 'externalNullifierHash', type: 'uint256' },
-                    { name: 'proof', type: 'uint256[8]' },
-                ],
-                name: 'verifyAndRegister',
-                outputs: [],
-                stateMutability: 'nonpayable',
-                type: 'function',
-            },
-        ],
+        abi: VERIFY_AND_REGISTER_ABI,
     })
+
+    // .result() blocks until the onchain write is confirmed
+    const txResult = txWrite.result()
 
     runtime.log('Step 4: Onchain write complete ✓', { txHash: txResult.txHash })
 
@@ -214,4 +201,4 @@ export async function handler(
     }
 }
 
-// ✓ identity-workflow/main.ts complete
+// ✓ identity-workflow/main.ts — CRE SDK pattern
