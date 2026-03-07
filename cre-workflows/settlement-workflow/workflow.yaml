@@ -1,0 +1,36 @@
+# ═══════════════════════════════════════════════
+# MIRAGE MARKET — CRE Settlement Workflow
+# Triggered by MarketClosed event on Sepolia
+# ═══════════════════════════════════════════════
+
+name: mirage-settlement
+version: "0.1.0"
+
+triggers:
+  - type: evm-log
+    id: market-closed-trigger
+    config:
+      chainName: ethereum-sepolia
+      contractAddress: "0x54576aC5a0cF7566287d7fcb410c8f523357889d"
+      eventSignature: "MarketClosed(bytes32)"
+
+consensus:
+  type: identical
+  config:
+    aggregation: consensusIdenticalAggregation
+
+targets:
+  - type: evm-write
+    id: settlement-target
+    config:
+      chainName: ethereum-sepolia
+      contractAddress: "0x25Fb1b433Db1dFAfF1C73Dd189E7183d8fDe0FC4"
+
+config:
+  shadowMarketAddress: "0x54576aC5a0cF7566287d7fcb410c8f523357889d"
+  settlementReceiverAddress: "0x25Fb1b433Db1dFAfF1C73Dd189E7183d8fDe0FC4"
+  chainName: ethereum-sepolia
+  dataApiUrl: "https://api.coingecko.com"
+
+secrets:
+  - DATA_API_KEY

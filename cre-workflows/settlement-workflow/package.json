@@ -1,0 +1,18 @@
+{
+    "name": "mirage-settlement-workflow",
+    "version": "0.1.0",
+    "private": true,
+    "description": "CRE AI Settlement Workflow — MarketClosed → Confidential HTTP → Deterministic Resolution → Onchain Write",
+    "main": "main.ts",
+    "scripts": {
+        "postinstall": "bunx cre-setup",
+        "simulate": "cre workflow simulate .",
+        "build": "cre workflow build ."
+    },
+    "dependencies": {
+        "@chainlink/cre-sdk": "latest"
+    },
+    "engines": {
+        "bun": ">=1.3.0"
+    }
+}
