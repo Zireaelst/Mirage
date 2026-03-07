@@ -9,46 +9,30 @@
 //
 // This is the CORE of the hackathon demo.
 //
-// TRIGGER:  EVM Log on ShadowMarket.MarketClosed(bytes32 indexed marketId)
+// TRIGGER:  EVM Log on ShadowMarketV2.MarketClosed(bytes32 indexed marketId)
 // FLOW:
 //   1. Extract marketId from EVM log topics
-//   2. EVMClient.readContract: fetch market details from ShadowMarket
-//   3. ConfidentialHTTPClient: fetch outcome data from external API
-//      - API key accessed via runtime.getSecret() — NEVER onchain
+//   2. EVMClient.readContract → fetch market details from ShadowMarketV2
+//   3. ConfidentialHTTPClient → fetch outcome data from external API
+//      - API key accessed via getSecret() — NEVER onchain
 //   4. Deterministic resolution (NOT LLM — avoids non-determinism)
-//   5. EVMClient.writeReport: submit settlement to SettlementReceiver
+//   5. EVMClient.writeContract → submit settlement to SettlementReceiver
 //
 // CONSENSUS: Identical aggregation — all DON nodes must resolve
 //            to the same outcome before writing onchain.
 //            This is why we use DETERMINISTIC resolution, not LLM.
 // ═══════════════════════════════════════════════
 
-// --- TypeScript Interfaces ---
+import {
+    type CRERuntime,
+    type EVMLogTriggerEvent,
+    type ConfidentialHTTPResponse,
+    type EVMReadResult,
+    type EVMWriteResult,
+} from '@chainlink/cre-sdk'
 
-/** Market data from ShadowMarket.getMarket() */
-interface MarketData {
-    id: string
-    title: string
-    description: string
-    endTime: bigint
-    minBet: bigint
-    commitCount: bigint
-    totalPool: bigint
-    status: number  // 0=OPEN, 1=CLOSED, 2=SETTLED
-    outcome: boolean
-    outcomeSet: boolean
-    creator: string
-}
+// ── Workflow Configuration (from workflow.yaml config:) ──
 
-/** API price response from CoinGecko */
-interface PriceAPIResponse {
-    [coinId: string]: {
-        usd: number
-        usd_24h_change: number
-    }
-}
-
-/** Workflow configuration */
 interface SettlementConfig {
     shadowMarketAddress: string
     settlementReceiverAddress: string
@@ -56,53 +40,65 @@ interface SettlementConfig {
     dataApiUrl: string
 }
 
-/** CRE runtime interface */
-interface CRERuntime {
-    log: (message: string, data?: Record<string, unknown>) => void
-    getSecret: (key: string) => string
-    httpClient: {
-        fetch: (url: string, options?: RequestInit) => Promise<{
-            status: number
-            body: unknown
-        }>
-    }
-    confidentialHttpClient: {
-        fetch: (url: string, options?: RequestInit) => Promise<{
-            status: number
-            body: unknown
-        }>
-    }
-    evmClient: {
-        writeContract: (params: {
-            contractAddress: string
-            method: string
-            args: unknown[]
-            chainName: string
-            abi: unknown[]
-        }) => Promise<{ txHash: string }>
-        readContract: (params: {
-            contractAddress: string
-            method: string
-            args: unknown[]
-            chainName: string
-            abi: unknown[]
-        }) => Promise<unknown>
+// ── API Response Types ──
+
+interface PriceAPIResponse {
+    [coinId: string]: {
+        usd: number
+        usd_24h_change: number
     }
 }
 
-/** EVM Log trigger event */
-interface EVMLogTriggerEvent {
-    /** Raw log topics — topic[0] is event sig, topic[1] is indexed marketId */
-    topics: string[]
-    /** Raw log data (non-indexed params) */
-    data: string
-    /** Block number where the event was emitted */
-    blockNumber: number
-    /** Transaction hash that emitted the event */
-    transactionHash: string
-}
+// ── ShadowMarketV2 ABI Fragment (getMarket) ──
 
-// --- Resolution Logic ---
+const GET_MARKET_ABI = [
+    {
+        inputs: [{ name: 'marketId', type: 'bytes32' }],
+        name: 'getMarket',
+        outputs: [
+            {
+                components: [
+                    { name: 'id', type: 'bytes32' },
+                    { name: 'title', type: 'string' },
+                    { name: 'description', type: 'string' },
+                    { name: 'category', type: 'uint8' },
+                    { name: 'endTime', type: 'uint256' },
+                    { name: 'minBet', type: 'uint256' },
+                    { name: 'commitCount', type: 'uint256' },
+                    { name: 'totalPool', type: 'uint256' },
+                    { name: 'yesPool', type: 'uint256' },
+                    { name: 'noPool', type: 'uint256' },
+                    { name: 'status', type: 'uint8' },
+                    { name: 'outcome', type: 'bool' },
+                    { name: 'outcomeSet', type: 'bool' },
+                    { name: 'creator', type: 'address' },
+                ],
+                name: '',
+                type: 'tuple',
+            },
+        ],
+        stateMutability: 'view',
+        type: 'function',
+    },
+] as const
+
+// ── SettlementReceiver ABI Fragment (receiveSettlement) ──
+
+const RECEIVE_SETTLEMENT_ABI = [
+    {
+        inputs: [
+            { name: 'marketId', type: 'bytes32' },
+            { name: 'outcome', type: 'bool' },
+            { name: 'proof', type: 'bytes' },
+        ],
+        name: 'receiveSettlement',
+        outputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+    },
+] as const
+
+// ── Resolution Logic ──
 
 /**
  * Deterministic outcome resolution.
@@ -115,11 +111,6 @@ interface EVMLogTriggerEvent {
  * Resolution strategies:
  * 1. Price markets: Compare current price against threshold in title
  * 2. Binary events: Check if event occurred based on API data
- *
- * @param marketTitle The market question text
- * @param marketDescription Resolution criteria
- * @param apiData Raw API response data
- * @returns true for YES outcome, false for NO outcome
  */
 function resolveOutcome(
     marketTitle: string,
@@ -136,7 +127,6 @@ function resolveOutcome(
         const priceData = apiData as PriceAPIResponse
 
         // Find the relevant coin price
-        // Try bitcoin, ethereum, etc. based on title keywords
         let currentPrice = 0
         if (titleLower.includes('btc') || titleLower.includes('bitcoin')) {
             currentPrice = priceData['bitcoin']?.usd ?? 0
@@ -164,8 +154,6 @@ function resolveOutcome(
     }
 
     // ── Strategy 3: Binary keyword resolution ──
-    // For non-price markets, check if the description contains "yes"/"true" keywords
-    // This is a simplified fallback — in production, use specific API endpoints
     const dataStr = JSON.stringify(apiData).toLowerCase()
     if (dataStr.includes('"yes"') || dataStr.includes('"true"') || dataStr.includes('"confirmed"')) {
         return true
@@ -175,10 +163,10 @@ function resolveOutcome(
     return false
 }
 
-// --- Workflow Implementation ---
+// ── Main Handler (CRE SDK Pattern) ──
 
 /**
- * CRE AI Settlement Workflow
+ * CRE AI Settlement Workflow Handler
  *
  * Triggered when a market is closed (MarketClosed event).
  * Fetches real-world data via Confidential HTTP (API keys hidden),
@@ -190,11 +178,11 @@ function resolveOutcome(
  * transaction. The DON nodes access secrets through the encrypted
  * CRE secrets store.
  */
-export async function handler(
+export default function handler(
     runtime: CRERuntime,
     trigger: EVMLogTriggerEvent,
     config: SettlementConfig
-): Promise<{ marketId: string; outcome: boolean; txHash: string }> {
+) {
     // ── Step 1: Extract marketId from EVM log ──
     runtime.log('Step 1: Extracting marketId from MarketClosed event')
 
@@ -211,42 +199,33 @@ export async function handler(
         txHash: trigger.transactionHash,
     })
 
-    // ── Step 2: Fetch market details from ShadowMarket ──
-    runtime.log('Step 2: Reading market details from ShadowMarket')
+    // ── Step 2: Fetch market details from ShadowMarketV2 ──
+    // Using CRE SDK EVMClient.readContract with .result() pattern
+    runtime.log('Step 2: Reading market details from ShadowMarketV2')
 
-    const marketRaw = await runtime.evmClient.readContract({
+    const marketRead = runtime.evmClient.readContract({
         contractAddress: config.shadowMarketAddress,
         method: 'getMarket',
         args: [marketId],
         chainName: config.chainName,
-        abi: [
-            {
-                inputs: [{ name: 'marketId', type: 'bytes32' }],
-                name: 'getMarket',
-                outputs: [
-                    {
-                        components: [
-                            { name: 'id', type: 'bytes32' },
-                            { name: 'title', type: 'string' },
-                            { name: 'description', type: 'string' },
-                            { name: 'endTime', type: 'uint256' },
-                            { name: 'minBet', type: 'uint256' },
-                            { name: 'commitCount', type: 'uint256' },
-                            { name: 'totalPool', type: 'uint256' },
-                            { name: 'status', type: 'uint8' },
-                            { name: 'outcome', type: 'bool' },
-                            { name: 'outcomeSet', type: 'bool' },
-                            { name: 'creator', type: 'address' },
-                        ],
-                        name: '',
-                        type: 'tuple',
-                    },
-                ],
-                stateMutability: 'view',
-                type: 'function',
-            },
-        ],
-    }) as MarketData
+        abi: GET_MARKET_ABI,
+    })
+
+    // .result() blocks until the DON reads the contract
+    const marketRaw = marketRead.result() as {
+        id: string
+        title: string
+        description: string
+        category: number
+        endTime: bigint
+        minBet: bigint
+        commitCount: bigint
+        totalPool: bigint
+        status: number
+        outcome: boolean
+        outcomeSet: boolean
+        creator: string
+    }
 
     runtime.log('Market details', {
         title: marketRaw.title,
@@ -263,7 +242,7 @@ export async function handler(
     // Get API key from CRE encrypted secrets store
     const apiKey = runtime.getSecret('DATA_API_KEY')
 
-    // Determine which API endpoint to call based on market category
+    // Determine which API endpoint to call based on market title
     const titleLower = marketRaw.title.toLowerCase()
     let apiUrl: string
 
@@ -275,19 +254,22 @@ export async function handler(
         titleLower.includes('chainlink') ||
         titleLower.includes('sol')
     ) {
-        // Crypto price markets → CoinGecko
+        // Crypto price markets → CoinGecko Simple Price API
         apiUrl = `${config.dataApiUrl}/api/v3/simple/price?ids=bitcoin,ethereum,chainlink,solana&vs_currencies=usd&include_24hr_change=true`
     } else {
-        // General markets → generic data API
+        // General markets → generic data API fallback
         apiUrl = `${config.dataApiUrl}/api/v3/simple/price?ids=bitcoin&vs_currencies=usd`
     }
 
-    const dataResponse = await runtime.confidentialHttpClient.fetch(apiUrl, {
+    const dataFetch = runtime.confidentialHttpClient.fetch(apiUrl, {
         headers: {
             'x-cg-demo-api-key': apiKey,
             'Accept': 'application/json',
         },
     })
+
+    // .result() blocks until data is fetched via Confidential HTTP
+    const dataResponse = dataFetch.result()
 
     if (dataResponse.status !== 200) {
         runtime.log('Data API error', { status: dataResponse.status })
@@ -326,7 +308,7 @@ export async function handler(
         resolution: outcome ? 'YES' : 'NO',
     })
 
-    const txResult = await runtime.evmClient.writeContract({
+    const txWrite = runtime.evmClient.writeContract({
         contractAddress: config.settlementReceiverAddress,
         method: 'receiveSettlement',
         args: [
@@ -335,20 +317,11 @@ export async function handler(
             new TextEncoder().encode(proofData),
         ],
         chainName: config.chainName,
-        abi: [
-            {
-                inputs: [
-                    { name: 'marketId', type: 'bytes32' },
-                    { name: 'outcome', type: 'bool' },
-                    { name: 'proof', type: 'bytes' },
-                ],
-                name: 'receiveSettlement',
-                outputs: [],
-                stateMutability: 'nonpayable',
-                type: 'function',
-            },
-        ],
+        abi: RECEIVE_SETTLEMENT_ABI,
     })
+
+    // .result() blocks until the onchain write is confirmed
+    const txResult = txWrite.result()
 
     runtime.log('Step 5: Settlement written onchain ✓', {
         txHash: txResult.txHash,
@@ -363,4 +336,4 @@ export async function handler(
     }
 }
 
-// ✓ settlement-workflow/main.ts complete
+// ✓ settlement-workflow/main.ts — CRE SDK pattern
