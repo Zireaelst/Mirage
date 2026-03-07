@@ -1,0 +1,36 @@
+# ═══════════════════════════════════════════════
+# MIRAGE MARKET — CRE Identity Verification Workflow
+# Triggered via HTTP POST from World ID verification
+# ═══════════════════════════════════════════════
+
+name: mirage-identity
+version: "0.1.0"
+
+triggers:
+  - type: http
+    id: verify-identity-trigger
+    config:
+      method: POST
+      path: /verify-identity
+
+consensus:
+  type: identical
+  config:
+    aggregation: consensusIdenticalAggregation
+
+targets:
+  - type: evm-write
+    id: identity-gate-target
+    config:
+      chainName: ethereum-sepolia
+      contractAddress: "0x50DF50C761bA75Da4d5edf29943e7da310A8E135"
+
+config:
+  worldIdApiUrl: "https://developer.worldcoin.org"
+  worldIdAppId: "app_xxx"
+  identityGateAddress: "0x50DF50C761bA75Da4d5edf29943e7da310A8E135"
+  chainName: ethereum-sepolia
+  rpId: "rp_xxx"
+
+secrets:
+  - RP_SIGNING_KEY
