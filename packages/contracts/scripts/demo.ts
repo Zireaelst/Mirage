@@ -54,24 +54,32 @@ async function sleep(ms: number) {
 async function main() {
     const [deployer] = await ethers.getSigners()
 
-    // Load deployed contracts
-    const shadowMarket = await ethers.getContractAt(
-        'ShadowMarketV2',
-        '0x54576aC5a0cF7566287d7fcb410c8f523357889d'
-    )
-    const settlementReceiver = await ethers.getContractAt(
-        'SettlementReceiver',
-        '0x25Fb1b433Db1dFAfF1C73Dd189E7183d8fDe0FC4'
-    )
-    const identityGate = await ethers.getContractAt(
-        'IdentityGate',
-        '0x50DF50C761bA75Da4d5edf29943e7da310A8E135'
-    )
-
+    // ── Deploy Fresh Contracts for Demo ──
     header('MIRAGE MARKET — Full Flow Demo')
     console.log(`${DIM}  Network: Ethereum Sepolia`)
     console.log(`  Deployer: ${deployer.address}${RESET}`)
     console.log()
+
+    step(0, 'Deploying fresh contracts for demo...')
+
+    // Deploy a mock IdentityGate that just lets anyone verify
+    const MockIdentityGate = await ethers.getContractFactory('MockIdentityGate')
+    const identityGate = await MockIdentityGate.deploy()
+    await identityGate.waitForDeployment()
+
+    // Deploy ShadowMarketV2
+    const ShadowMarketV2 = await ethers.getContractFactory('ShadowMarketV2')
+    const shadowMarket = await ShadowMarketV2.deploy(await identityGate.getAddress())
+    await shadowMarket.waitForDeployment()
+
+    // Deploy SettlementReceiver
+    const SettlementReceiver = await ethers.getContractFactory('SettlementReceiver')
+    const settlementReceiver = await SettlementReceiver.deploy(await shadowMarket.getAddress())
+    await settlementReceiver.waitForDeployment()
+
+    await shadowMarket.setSettlementReceiver(await settlementReceiver.getAddress())
+
+    success('Instances deployed successfully')
 
     // ══════════════════════════════════════════════
     // STEP 1 — Create Market
